@@ -3,6 +3,8 @@
 > **Plug another person's brain into your AI.**
 > A live MCP server that lets your Claude / Cursor / Cline query a deeply researched knowledge base on AI Agents, Harness Engineering, World Models, and more.
 
+> 👀 **Don't know what to ask?** → **[See 25 ready-to-use prompts in RECIPES.md](./RECIPES.md)**
+
 ---
 
 ## ⚡ One-click install
@@ -54,28 +56,46 @@ https://benzema-wiki-mcp-production.up.railway.app/mcp
 
 ---
 
-## 🎯 Try these queries
+## 🎯 Quick start: 5 prompts by role
 
-After connecting, ask your LLM:
+> **For 25 prompts organized by role (investor / developer / researcher / writer / collaborator), see [RECIPES.md](./RECIPES.md).**
 
+After connecting, paste any of these into your LLM:
+
+**🎩 If you're an investor doing due diligence on Agent founders:**
 ```
-What's in BENZEMA's knowledge base?
-→ list_topics
-
-最近半年 World Model 领域有什么变化？
-→ search_knowledge "world model" + read_page world-model
-
-Show me the S-tier papers on Agent Communication
-→ get_paper_index agent-communication
-
-Compare JEPA and autoregressive world models
-→ search_knowledge JEPA + read_page world-model
-
-What is Harness Engineering and how does it relate to Creative AI?
-→ read_page harness-engineering + read_page harness-to-creative
+"What does BENZEMA think the core opportunity in Agent Economy is,
+and what's the biggest gap layer they identified?"
 ```
 
-The LLM will pick the right tools automatically.
+**👨‍💻 If you're an Agent developer hitting design questions:**
+```
+"How do kimi-cli and Claude Code differ in tool execution concurrency?
+What is sync handle / async future?"
+```
+
+**🎓 If you're a researcher needing fast cross-domain context:**
+```
+"Show me the S-tier papers on World Models with citation counts.
+Then explain BENZEMA's analysis of the three definitions and
+which benchmark is missing."
+```
+
+**📝 If you're a content creator needing citable quotes:**
+```
+"What is BENZEMA's analysis of Sora's shutdown? Give me quotes
+with original sources I can cite."
+```
+
+**🤝 If you're a potential collaborator/recruiter:**
+```
+"What does BENZEMA's research focus on? Give me a topic map.
+What products has BENZEMA actually deployed?"
+```
+
+The LLM will pick the right tools automatically. **No need to learn the schema.**
+
+→ **[See 20 more prompts in RECIPES.md](./RECIPES.md)**
 
 ---
 
