@@ -31,7 +31,9 @@ A remote MCP server that exposes [BENZEMA216/vault](https://github.com/BENZEMA21
 
 ### Option 1: Remote (recommended) — connect to the hosted node
 
-> **Endpoint**: `https://<your-deployment>.up.railway.app/mcp` _(coming soon)_
+> **🌐 Live endpoint**: `https://benzema-wiki-mcp-production.up.railway.app/mcp`
+>
+> **Health check**: https://benzema-wiki-mcp-production.up.railway.app/
 
 Add to your MCP client config:
 
@@ -42,7 +44,7 @@ Add to your MCP client config:
   "mcpServers": {
     "benzema-knowledge": {
       "type": "http",
-      "url": "https://<your-deployment>.up.railway.app/mcp"
+      "url": "https://benzema-wiki-mcp-production.up.railway.app/mcp"
     }
   }
 }
