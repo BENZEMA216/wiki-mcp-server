@@ -7,7 +7,12 @@ import { z } from "zod";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createWikiTools } from "./wiki-tools.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PUBLIC_DIR = path.join(__dirname, "public");
 import {
   initTelemetry,
   recordRequest,
@@ -167,14 +172,49 @@ function createMcpServer() {
 const app = express();
 app.use(express.json());
 
-// Health check
-app.get("/", (_req, res) => {
+// Static assets (install.sh, install.html, etc.) — never override /mcp or /stats
+app.use(
+  "/static",
+  express.static(PUBLIC_DIR, {
+    fallthrough: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".sh")) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      }
+    },
+  })
+);
+
+// One-line installer: `curl -fsSL .../install | bash`
+app.get("/install", (_req, res) => {
+  const filePath = path.join(PUBLIC_DIR, "install.sh");
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.sendFile(filePath);
+});
+
+// Landing page (HTML) for browsers visiting /install.html
+app.get("/install.html", (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "install.html"));
+});
+
+// Health check / landing page
+// - Browsers (Accept: text/html) get the install landing page
+// - API clients (Accept: application/json) get the JSON status
+app.get("/", (req, res) => {
+  const accept = String(req.headers["accept"] || "");
+  const wantsHtml =
+    accept.includes("text/html") && !accept.includes("application/json");
+
+  if (wantsHtml) {
+    return res.sendFile(path.join(PUBLIC_DIR, "install.html"));
+  }
+
   const wikiReady =
     fs.existsSync(WIKI_PATH) && fs.existsSync(path.join(WIKI_PATH, "_index.md"));
   const summary = getSummary();
   res.json({
     name: "BENZEMA Knowledge MCP Server",
-    version: "0.3.0",
+    version: "0.4.0",
     status: wikiReady ? "ready" : "syncing",
     description:
       "Remote MCP server exposing BENZEMA's LLM-compiled knowledge base as queryable Agent tools",

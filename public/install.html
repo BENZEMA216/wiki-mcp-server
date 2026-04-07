@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BENZEMA's Knowledge MCP — Install</title>
+<meta name="description" content="Plug another person's brain into your AI. One-line install for Claude Code, Cursor, Cline." />
+<style>
+  :root {
+    --bg: #0f0f10;
+    --fg: #e8e8e8;
+    --dim: #888;
+    --accent: #ffe45c;
+    --accent-2: #ff6b9d;
+    --code-bg: #1a1a1c;
+    --border: #2a2a2c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 64px 24px 96px;
+  }
+  header { margin-bottom: 48px; }
+  .logo {
+    display: inline-block;
+    background: var(--accent);
+    color: #000;
+    padding: 4px 12px;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    border: 2px solid #000;
+    box-shadow: 4px 4px 0 #000;
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-size: 36px;
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+  h1 .accent { color: var(--accent-2); }
+  .tagline {
+    color: var(--dim);
+    font-size: 16px;
+    margin-bottom: 0;
+  }
+  h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    margin: 48px 0 16px;
+    font-weight: 600;
+  }
+  .install-box {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    border-radius: 8px;
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .install-box code {
+    font-family: "JetBrains Mono", "Menlo", "Monaco", monospace;
+    font-size: 14px;
+    color: var(--fg);
+    word-break: break-all;
+    display: block;
+    padding-right: 80px;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 6px 14px;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-family: inherit;
+    transition: transform 0.1s;
+  }
+  .copy-btn:hover { transform: translateY(-1px); }
+  .copy-btn:active { transform: translateY(1px); }
+  .copy-btn.copied { background: #6dd66d; }
+  .small {
+    font-size: 13px;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+  .small code {
+    font-family: "JetBrains Mono", "Menlo", monospace;
+    font-size: 12px;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--fg);
+  }
+  .prompts {
+    list-style: none;
+    counter-reset: prompt;
+  }
+  .prompts li {
+    counter-increment: prompt;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 20px 16px 56px;
+    margin-bottom: 10px;
+    position: relative;
+    font-size: 14px;
+  }
+  .prompts li::before {
+    content: counter(prompt);
+    position: absolute;
+    left: 18px;
+    top: 16px;
+    background: var(--accent);
+    color: #000;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .links {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 14px;
+  }
+  .links a {
+    color: var(--accent);
+    text-decoration: none;
+    margin-right: 16px;
+  }
+  .links a:hover { text-decoration: underline; }
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 12px;
+  }
+  footer a { color: var(--dim); }
+  .pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #6dd66d;
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SLOCK · WIKI MCP</div>
+  <h1>Plug <span class="accent">another person's brain</span><br>into your AI.</h1>
+  <p class="tagline">A live MCP server exposing BENZEMA's deeply researched knowledge base on AI Agents, Harness Engineering, World Models, and more. <span class="pulse"></span><span id="status-text">checking…</span></p>
+</header>
+
+<h2>1 · One-line install</h2>
+<div class="install-box">
+  <code id="install-cmd">curl -fsSL https://benzema-wiki-mcp-production.up.railway.app/install | bash</code>
+  <button class="copy-btn" onclick="copyCmd('install-cmd', this)">COPY</button>
+</div>
+<p class="small">Detects Claude Code / Cursor / Cline and adds the MCP automatically. Backups (<code>.bak</code>) are created before any edit.</p>
+
+<h2>2 · Or paste this into your MCP config</h2>
+<div class="install-box">
+  <code id="json-cmd">{"mcpServers": {"benzema-knowledge": {"type": "http", "url": "https://benzema-wiki-mcp-production.up.railway.app/mcp"}}}</code>
+  <button class="copy-btn" onclick="copyCmd('json-cmd', this)">COPY</button>
+</div>
+<p class="small">Works with any MCP client supporting HTTP / StreamableHTTP transport.</p>
+
+<h2>3 · Then ask your LLM</h2>
+<ol class="prompts">
+  <li>What's in BENZEMA's knowledge base?</li>
+  <li>Show me the top World Model papers with citation counts.</li>
+  <li>How do kimi-cli and Claude Code differ in tool execution concurrency?</li>
+  <li>Compare slock.ai, HiClaw and RockClaw — three agent-native IM implementations.</li>
+  <li>What does BENZEMA think the missing layer in Agent Economy is?</li>
+</ol>
+
+<div class="links">
+  <a href="https://github.com/BENZEMA216/wiki-mcp-server/blob/main/RECIPES.md">📖 25 more prompts by role</a>
+  <a href="https://github.com/BENZEMA216/wiki-mcp-server">⭐ GitHub</a>
+  <a href="/stats">📊 Live stats</a>
+</div>
+
+<footer>
+  Built by <a href="https://github.com/BENZEMA216">@BENZEMA216</a> ·
+  Powered by the <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">LLM Wiki Pattern</a> ·
+  Knowledge Agent Network — Node #1
+</footer>
+
+<script>
+  function copyCmd(id, btn) {
+    const text = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'COPIED!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 1200);
+    });
+  }
+
+  // Show live status from /
+  fetch('/').then(r => r.json()).then(d => {
+    const el = document.getElementById('status-text');
+    if (d.status === 'ready') {
+      const u = d.usage || {};
+      el.textContent = `live · ${u.total_requests || 0} requests served`;
+    } else {
+      el.textContent = d.status || 'unknown';
+    }
+  }).catch(() => {
+    document.getElementById('status-text').textContent = 'offline?';
+  });
+</script>
+
+</body>
+</html>

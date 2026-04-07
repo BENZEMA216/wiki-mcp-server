@@ -1,6 +1,6 @@
 {
   "name": "wiki-mcp-server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Remote MCP Server — turn an LLM-compiled knowledge base into a queryable Agent node accessible over HTTP/SSE",
   "type": "module",
   "main": "server.js",
