@@ -29,19 +29,32 @@ function syncVault() {
       fs.existsSync(path.join(VAULT_DIR, ".git", "HEAD")) &&
       fs.existsSync(path.join(VAULT_DIR, "wiki"));
 
+    // Force git to never prompt for credentials in non-TTY environments
+    const gitEnv = {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_ASKPASS: "/bin/echo",
+      GCM_INTERACTIVE: "Never",
+    };
+
     if (!isValidRepo) {
       console.log(`[vault] (re)cloning ${VAULT_REPO} → ${VAULT_DIR}`);
       if (fs.existsSync(VAULT_DIR)) {
         fs.rmSync(VAULT_DIR, { recursive: true, force: true });
       }
-      execSync(`git clone --depth 1 ${VAULT_REPO} ${VAULT_DIR}`, {
-        stdio: "pipe",
-        timeout: 120000,
-      });
+      execSync(
+        `git -c http.extraHeader='User-Agent: wiki-mcp-server' clone --depth 1 ${VAULT_REPO} ${VAULT_DIR}`,
+        {
+          stdio: "pipe",
+          timeout: 120000,
+          env: gitEnv,
+        }
+      );
     } else {
       execSync(`git -C ${VAULT_DIR} pull --ff-only --depth 1`, {
         stdio: "pipe",
         timeout: 60000,
+        env: gitEnv,
       });
     }
     lastSyncAt = new Date().toISOString();
