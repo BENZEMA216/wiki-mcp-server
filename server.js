@@ -1,254 +1,220 @@
+// Remote MCP Server (HTTP + SSE)
+// Exposes BENZEMA's LLM-compiled knowledge base as queryable Agent tools.
+import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { glob } from "glob";
+import { createWikiTools } from "./wiki-tools.js";
 
-// Configure your wiki path here
-const WIKI_PATH =
-  process.env.WIKI_PATH ||
-  path.join(
-    process.env.HOME,
-    "Downloads/OBSIDIAN/BENZEMA/wiki"
-  );
-const RAW_PATH =
-  process.env.RAW_PATH ||
-  path.join(
-    process.env.HOME,
-    "Downloads/OBSIDIAN/BENZEMA/raw"
-  );
+const PORT = process.env.PORT || 3000;
+const VAULT_REPO =
+  process.env.VAULT_REPO || "https://github.com/BENZEMA216/vault.git";
+const VAULT_DIR = process.env.VAULT_DIR || "/tmp/vault";
+const PULL_INTERVAL_MS = parseInt(process.env.PULL_INTERVAL_MS || "600000"); // 10 min
 
-const server = new McpServer({
-  name: "knowledge-base",
-  version: "0.1.0",
-});
+const WIKI_PATH = path.join(VAULT_DIR, "wiki");
+const RAW_PATH = path.join(VAULT_DIR, "raw");
 
-// Helper: read file safely
-function readFile(filePath) {
+// ─── Bootstrap: clone or pull the vault ────────────────────────────────────
+let lastSyncAt = null;
+let lastSyncStatus = "pending";
+
+function syncVault() {
   try {
-    return fs.readFileSync(filePath, "utf-8");
-  } catch {
-    return null;
-  }
-}
+    // Detect a broken/empty vault dir (e.g. interrupted clone) and reset it
+    const isValidRepo =
+      fs.existsSync(path.join(VAULT_DIR, ".git", "HEAD")) &&
+      fs.existsSync(path.join(VAULT_DIR, "wiki"));
 
-// Helper: list all wiki pages
-function listWikiPages() {
-  const pages = [];
-  for (const dir of ["concepts", "maps", "connections"]) {
-    const dirPath = path.join(WIKI_PATH, dir);
-    if (!fs.existsSync(dirPath)) continue;
-    for (const file of fs.readdirSync(dirPath)) {
-      if (!file.endsWith(".md")) continue;
-      const content = readFile(path.join(dirPath, file));
-      const firstLine = content?.split("\n").find((l) => l.startsWith("# "));
-      const quote = content
-        ?.split("\n")
-        .find((l) => l.startsWith("> ") && !l.includes("LLM"));
-      pages.push({
-        type: dir.replace(/s$/, ""),
-        slug: file.replace(".md", ""),
-        title: firstLine?.replace("# ", "") || file,
-        summary: quote?.replace("> ", "") || "",
-        path: `wiki/${dir}/${file}`,
+    if (!isValidRepo) {
+      console.log(`[vault] (re)cloning ${VAULT_REPO} → ${VAULT_DIR}`);
+      if (fs.existsSync(VAULT_DIR)) {
+        fs.rmSync(VAULT_DIR, { recursive: true, force: true });
+      }
+      execSync(`git clone --depth 1 ${VAULT_REPO} ${VAULT_DIR}`, {
+        stdio: "pipe",
+        timeout: 120000,
+      });
+    } else {
+      execSync(`git -C ${VAULT_DIR} pull --ff-only --depth 1`, {
+        stdio: "pipe",
+        timeout: 60000,
       });
     }
+    lastSyncAt = new Date().toISOString();
+    lastSyncStatus = "ok";
+    console.log(`[vault] sync ok at ${lastSyncAt}`);
+  } catch (err) {
+    lastSyncStatus = `error: ${err.message?.slice(0, 200) || "unknown"}`;
+    console.error(`[vault] sync failed:`, err.message);
   }
-  return pages;
 }
 
-// Tool 1: List all topics in the knowledge base
-server.tool(
-  "list_topics",
-  "List all topics (concepts, maps, connections) in BENZEMA's knowledge base. Call this first to see what knowledge is available.",
-  {},
-  async () => {
-    const pages = listWikiPages();
-    const grouped = { concept: [], map: [], connection: [] };
-    for (const p of pages) {
-      grouped[p.type]?.push(p);
-    }
+// Run first sync asynchronously (don't block server startup)
+setTimeout(syncVault, 100);
+setInterval(syncVault, PULL_INTERVAL_MS);
 
-    let output = `# BENZEMA Knowledge Base\n\n`;
-    output += `> LLM-compiled wiki with ${pages.length} pages across AI Agent infrastructure, Harness Engineering, World Models, and Creative AI.\n\n`;
+// ─── MCP Server setup ───────────────────────────────────────────────────────
+const tools = createWikiTools({ wikiPath: WIKI_PATH, rawPath: RAW_PATH });
 
-    output += `## Concepts (${grouped.concept.length})\n`;
-    for (const p of grouped.concept) {
-      output += `- **${p.title}** — ${p.summary}\n`;
-    }
+function createMcpServer() {
+  const server = new McpServer({
+    name: "benzema-knowledge",
+    version: "0.2.0",
+  });
 
-    output += `\n## Maps (${grouped.map.length})\n`;
-    for (const p of grouped.map) {
-      output += `- **${p.title}** — ${p.summary}\n`;
-    }
+  server.tool(
+    "list_topics",
+    "List all topics (concepts, maps, connections) in BENZEMA's knowledge base. Call this first to see what knowledge is available.",
+    {},
+    async () => ({
+      content: [{ type: "text", text: await tools.list_topics() }],
+    })
+  );
 
-    output += `\n## Connections (${grouped.connection.length})\n`;
-    for (const p of grouped.connection) {
-      output += `- **${p.title}** — ${p.summary}\n`;
-    }
+  server.tool(
+    "read_page",
+    "Read the full content of a specific wiki page. Use the slug from list_topics.",
+    {
+      slug: z.string().describe("Page slug, e.g. 'agent-communication'"),
+      type: z
+        .enum(["concept", "map", "connection"])
+        .default("concept")
+        .describe("Page type"),
+    },
+    async ({ slug, type }) => ({
+      content: [{ type: "text", text: await tools.read_page({ slug, type }) }],
+    })
+  );
 
-    return { content: [{ type: "text", text: output }] };
-  }
-);
-
-// Tool 2: Read a specific wiki page
-server.tool(
-  "read_page",
-  "Read the full content of a specific wiki page. Use the slug from list_topics (e.g. 'agent-communication', 'world-model', 'harness-engineering').",
-  {
-    slug: z.string().describe("Page slug, e.g. 'agent-communication'"),
-    type: z
-      .enum(["concept", "map", "connection"])
-      .default("concept")
-      .describe("Page type"),
-  },
-  async ({ slug, type }) => {
-    const dir = type + "s";
-    const filePath = path.join(WIKI_PATH, dir, `${slug}.md`);
-    const content = readFile(filePath);
-    if (!content) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Page not found: ${dir}/${slug}.md\n\nAvailable pages:\n${listWikiPages()
-              .filter((p) => p.type === type)
-              .map((p) => `- ${p.slug}`)
-              .join("\n")}`,
-          },
-        ],
-      };
-    }
-    return { content: [{ type: "text", text: content }] };
-  }
-);
-
-// Tool 3: Search the knowledge base
-server.tool(
-  "search_knowledge",
-  "Search across the entire knowledge base (wiki + raw sources) for a keyword or topic. Returns matching excerpts with file paths.",
-  {
-    query: z.string().describe("Search keyword or phrase"),
-    scope: z
-      .enum(["wiki", "raw", "all"])
-      .default("wiki")
-      .describe("Search scope"),
-    max_results: z.number().default(10).describe("Maximum results to return"),
-  },
-  async ({ query, scope, max_results }) => {
-    const searchPaths = [];
-    if (scope === "wiki" || scope === "all") searchPaths.push(WIKI_PATH);
-    if (scope === "raw" || scope === "all") searchPaths.push(RAW_PATH);
-
-    const results = [];
-    const queryLower = query.toLowerCase();
-
-    for (const basePath of searchPaths) {
-      const files = await glob("**/*.md", { cwd: basePath });
-      for (const file of files) {
-        if (results.length >= max_results) break;
-        const fullPath = path.join(basePath, file);
-        const content = readFile(fullPath);
-        if (!content) continue;
-
-        const lines = content.split("\n");
-        const matchingLines = [];
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].toLowerCase().includes(queryLower)) {
-            const start = Math.max(0, i - 1);
-            const end = Math.min(lines.length, i + 2);
-            matchingLines.push(lines.slice(start, end).join("\n"));
-          }
-        }
-
-        if (matchingLines.length > 0) {
-          const relPath = path.relative(
-            path.dirname(basePath),
-            fullPath
-          );
-          results.push({
-            file: relPath,
-            matches: matchingLines.length,
-            excerpts: matchingLines.slice(0, 3),
-          });
-        }
-      }
-    }
-
-    if (results.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No results found for "${query}" in ${scope} scope.`,
-          },
-        ],
-      };
-    }
-
-    let output = `# Search: "${query}" (${results.length} files matched)\n\n`;
-    for (const r of results) {
-      output += `## ${r.file} (${r.matches} matches)\n`;
-      for (const ex of r.excerpts) {
-        output += `\`\`\`\n${ex}\n\`\`\`\n`;
-      }
-      output += "\n";
-    }
-
-    return { content: [{ type: "text", text: output }] };
-  }
-);
-
-// Tool 4: Get the wiki index
-server.tool(
-  "get_index",
-  "Get the full knowledge base index — the master catalog of all topics organized by domain. Start here to understand the knowledge structure.",
-  {},
-  async () => {
-    const content = readFile(path.join(WIKI_PATH, "_index.md"));
-    return {
-      content: [{ type: "text", text: content || "Index not found" }],
-    };
-  }
-);
-
-// Tool 5: Get paper index (with citations and quality tiers)
-server.tool(
-  "get_paper_index",
-  "Get the paper index for a specific research area. Includes citation counts, quality tiers (S/A/B/C), and arXiv URLs.",
-  {
-    area: z
-      .enum(["agent-communication", "world-model", "reasoning"])
-      .describe("Research area"),
-  },
-  async ({ area }) => {
-    const paths = {
-      "agent-communication": path.join(
-        RAW_PATH,
-        "articles/agent-communication/paper-index.md"
-      ),
-      "world-model": path.join(
-        RAW_PATH,
-        "articles/world-model/paper-index.md"
-      ),
-      reasoning: path.join(
-        RAW_PATH,
-        "papers/reasoning/LLM-Reasoning-Paper-Index.md"
-      ),
-    };
-    const content = readFile(paths[area]);
-    return {
+  server.tool(
+    "search_knowledge",
+    "Search across the knowledge base for a keyword. Returns matching excerpts with file paths.",
+    {
+      query: z.string().describe("Search keyword or phrase"),
+      scope: z
+        .enum(["wiki", "raw", "all"])
+        .default("wiki")
+        .describe("Search scope"),
+      max_results: z.number().default(10),
+    },
+    async ({ query, scope, max_results }) => ({
       content: [
         {
           type: "text",
-          text: content || `Paper index not found for ${area}`,
+          text: await tools.search_knowledge({ query, scope, max_results }),
         },
       ],
-    };
-  }
-);
+    })
+  );
 
-// Start server
-const transport = new StdioServerTransport();
-await server.connect(transport);
+  server.tool(
+    "get_index",
+    "Get the master knowledge base index. Start here to understand the knowledge structure.",
+    {},
+    async () => ({
+      content: [{ type: "text", text: await tools.get_index() }],
+    })
+  );
+
+  server.tool(
+    "get_paper_index",
+    "Get the paper index for a research area with citation counts and quality tiers.",
+    {
+      area: z.enum(["agent-communication", "world-model", "reasoning"]),
+    },
+    async ({ area }) => ({
+      content: [{ type: "text", text: await tools.get_paper_index({ area }) }],
+    })
+  );
+
+  server.tool(
+    "get_log",
+    "Get the chronological log of knowledge base operations.",
+    {},
+    async () => ({ content: [{ type: "text", text: await tools.get_log() }] })
+  );
+
+  return server;
+}
+
+// ─── HTTP Server ────────────────────────────────────────────────────────────
+const app = express();
+app.use(express.json());
+
+// Health check
+app.get("/", (_req, res) => {
+  const wikiReady =
+    fs.existsSync(WIKI_PATH) && fs.existsSync(path.join(WIKI_PATH, "_index.md"));
+  res.json({
+    name: "BENZEMA Knowledge MCP Server",
+    version: "0.2.0",
+    status: wikiReady ? "ready" : "syncing",
+    description:
+      "Remote MCP server exposing BENZEMA's LLM-compiled knowledge base as queryable Agent tools",
+    vault_repo: VAULT_REPO,
+    vault_synced: wikiReady,
+    last_sync_at: lastSyncAt,
+    last_sync_status: lastSyncStatus,
+    mcp_endpoint: "/mcp",
+    tools: [
+      "list_topics",
+      "read_page",
+      "search_knowledge",
+      "get_index",
+      "get_paper_index",
+      "get_log",
+    ],
+    docs: "https://github.com/BENZEMA216/wiki-mcp-server",
+    owner: "BENZEMA216",
+    owner_github: "https://github.com/BENZEMA216",
+    network: "Knowledge Agent Network — node #1",
+  });
+});
+
+// MCP endpoint (stateless mode for simplicity — each request is independent)
+app.post("/mcp", async (req, res) => {
+  try {
+    const server = createMcpServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless
+    });
+
+    res.on("close", () => {
+      transport.close();
+      server.close();
+    });
+
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    console.error("[mcp] error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal server error" },
+        id: null,
+      });
+    }
+  }
+});
+
+app.get("/mcp", (_req, res) => {
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: "Method not allowed. Use POST for MCP requests.",
+    },
+    id: null,
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`[server] BENZEMA Knowledge MCP listening on :${PORT}`);
+  console.log(`[server] MCP endpoint: POST /mcp`);
+  console.log(`[server] Health: GET /`);
+});

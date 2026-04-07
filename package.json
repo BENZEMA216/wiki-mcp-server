@@ -1,15 +1,20 @@
 {
   "name": "wiki-mcp-server",
-  "version": "0.1.0",
-  "description": "MCP Server that exposes an LLM-compiled knowledge base as queryable Agent tools",
+  "version": "0.2.0",
+  "description": "Remote MCP Server — turn an LLM-compiled knowledge base into a queryable Agent node accessible over HTTP/SSE",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:stdio": "node server-stdio.js",
     "dev": "node --watch server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "glob": "^11.0.0"
+    "glob": "^11.0.0",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
