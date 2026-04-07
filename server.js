@@ -8,6 +8,12 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { createWikiTools } from "./wiki-tools.js";
+import {
+  initTelemetry,
+  recordRequest,
+  getSummary,
+  getRecent,
+} from "./telemetry.js";
 
 const PORT = process.env.PORT || 3000;
 const VAULT_REPO =
@@ -69,6 +75,9 @@ function syncVault() {
 // Run first sync asynchronously (don't block server startup)
 setTimeout(syncVault, 100);
 setInterval(syncVault, PULL_INTERVAL_MS);
+
+// Initialize telemetry (replay existing log to rebuild in-memory stats)
+initTelemetry();
 
 // ─── MCP Server setup ───────────────────────────────────────────────────────
 const tools = createWikiTools({ wikiPath: WIKI_PATH, rawPath: RAW_PATH });
@@ -162,9 +171,10 @@ app.use(express.json());
 app.get("/", (_req, res) => {
   const wikiReady =
     fs.existsSync(WIKI_PATH) && fs.existsSync(path.join(WIKI_PATH, "_index.md"));
+  const summary = getSummary();
   res.json({
     name: "BENZEMA Knowledge MCP Server",
-    version: "0.2.0",
+    version: "0.3.0",
     status: wikiReady ? "ready" : "syncing",
     description:
       "Remote MCP server exposing BENZEMA's LLM-compiled knowledge base as queryable Agent tools",
@@ -181,6 +191,16 @@ app.get("/", (_req, res) => {
       "get_paper_index",
       "get_log",
     ],
+    usage: {
+      total_requests: summary.total_requests,
+      unique_ips: summary.unique_ips,
+      by_tool: summary.by_tool,
+      by_client: summary.by_user_agent,
+      last_request_at: summary.last_request_at,
+      first_request_at: summary.first_request_at,
+      stats_url: "/stats",
+      recent_url: "/stats/recent",
+    },
     docs: "https://github.com/BENZEMA216/wiki-mcp-server",
     owner: "BENZEMA216",
     owner_github: "https://github.com/BENZEMA216",
@@ -190,6 +210,9 @@ app.get("/", (_req, res) => {
 
 // MCP endpoint (stateless mode for simplicity — each request is independent)
 app.post("/mcp", async (req, res) => {
+  const startedAt = Date.now();
+  let ok = true;
+
   try {
     const server = createMcpServer();
     const transport = new StreamableHTTPServerTransport({
@@ -199,11 +222,21 @@ app.post("/mcp", async (req, res) => {
     res.on("close", () => {
       transport.close();
       server.close();
+      // Record telemetry when the response closes (covers both success and
+      // client disconnects mid-stream). We read `req.body` which Express
+      // already parsed before handing off to the MCP transport.
+      recordRequest({
+        req,
+        body: req.body,
+        durationMs: Date.now() - startedAt,
+        ok,
+      });
     });
 
     await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
+    ok = false;
     console.error("[mcp] error:", err);
     if (!res.headersSent) {
       res.status(500).json({
@@ -224,6 +257,18 @@ app.get("/mcp", (_req, res) => {
     },
     id: null,
   });
+});
+
+// ─── Observability endpoints ────────────────────────────────────────────────
+// Aggregate stats (no PII, safe to expose publicly)
+app.get("/stats", (_req, res) => {
+  res.json(getSummary());
+});
+
+// Recent request log (last N entries, already stripped of IP/UA details)
+app.get("/stats/recent", (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
+  res.json({ limit, records: getRecent(limit) });
 });
 
 app.listen(PORT, () => {
