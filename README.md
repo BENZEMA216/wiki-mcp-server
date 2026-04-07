@@ -7,6 +7,18 @@
 
 ---
 
+## 🚀 30-second install
+
+```bash
+curl -fsSL https://benzema-wiki-mcp-production.up.railway.app/install | bash
+```
+
+Detects Claude Code / Cursor / Cline automatically. Creates `.bak` backups before any edit. Works on macOS and Linux.
+
+→ Or visit the [**install landing page**](https://benzema-wiki-mcp-production.up.railway.app/) with copy buttons.
+
+---
+
 ## ⚡ One-click install
 
 ### For Claude Code
